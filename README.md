@@ -94,6 +94,9 @@ docker compose up -d
 # `pull` is split out from `up` so any registry / network failures surface
 # explicitly instead of being buried in startup output.
 
+
+# 4.0. Create a new .venv using Python 3.14
+/opt/homebrew/bin/python3.14 -m venv .venv
 # 4. Install Python deps (use a virtualenv)
 python -m venv .venv
 # Activate it:
@@ -115,8 +118,9 @@ In a second shell, with the service running:
 # Plain curl
 curl -X POST http://localhost:8000/chat \
   -H "Content-Type: application/json" \
-  -d '{"message": "Find flights from Paris to Rome"}'
+  -d '{"message": "Find flights from Paris to Rome"}' | jq
 ```
+
 
 PowerShell equivalent:
 

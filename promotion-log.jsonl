@@ -1,0 +1,5 @@
+{"ts": "2026-06-07T20:57:41.297175Z", "alias": "production", "from": "", "to": "v1", "op": "set"}
+{"ts": "2026-06-07T20:57:56.789371Z", "alias": "production", "from": "v1", "to": "v4", "op": "set"}
+{"ts": "2026-06-07T20:58:01.525642Z", "alias": "production", "from": "v4", "to": "v5", "op": "set"}
+{"ts": "2026-06-07T20:58:13.702191Z", "alias": "production", "from": "v5", "to": "v4", "op": "rollback"}
+{"ts": "2026-06-07T22:13:20.165988Z", "alias": "production", "from": "v4", "to": "v6", "op": "set"}
