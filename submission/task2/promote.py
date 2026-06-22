@@ -37,7 +37,12 @@ from mlflow.tracking import MlflowClient
 from src.config import get_settings
 
 REGISTERED_MODEL_NAME = "travel-assistant"
-LOG_FILE = Path(__file__).resolve().parent.parent / "promotion-log.jsonl"
+SCRIPT_DIR = Path(__file__).resolve().parent
+LOG_FILE = (
+    SCRIPT_DIR.parent / "promotion-log.jsonl"
+    if SCRIPT_DIR.name == "scripts"
+    else SCRIPT_DIR / "promotion-log.jsonl"
+)
 
 
 def _client() -> MlflowClient:

@@ -396,3 +396,86 @@ Final checks:
 ```
 
 Both checks passed before the full Task3 run.
+
+# Task4
+
+Restored the missing Prometheus metrics and Grafana panel queries.
+
+Files changed:
+
+- `src/monitoring/metrics.py`
+- `src/assistant/service.py`
+- `src/monitoring/judge_worker.py`
+- `observability/grafana/dashboards/live_monitoring.json`
+
+Metrics added:
+
+- `chat_request_duration_seconds`: request latency histogram by `config_id`
+  with buckets `(0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0)`.
+- `chat_input_tokens`: per-model input-token histogram by `config_id, model`
+  with buckets `(16, 64, 256, 1024, 4096, 16384)`.
+- `chat_output_tokens`: per-model output-token histogram by `config_id, model`
+  with buckets `(8, 32, 128, 512, 2048)`.
+- `judge_evaluations_total`: sampled judge verdict counter by
+  `config_id, verdict`.
+- `judge_latency_seconds`: judge-call latency histogram by `config_id` with
+  buckets `(0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0)`.
+
+Instrumentation:
+
+- `/chat` now observes token counts for every `ModelCall`.
+- `/chat` now observes end-to-end request latency in the handler `finally`
+  block, so errors and successful requests both decrement in-flight state and
+  record duration.
+- `JudgeWorker` now increments `judge_evaluations_total` for each completed
+  sampled judge call and observes `judge_latency_seconds`.
+
+Grafana PromQL added:
+
+- DIVERGENCE panel:
+  - cheap refusal-rate:
+    `sum(rate(chat_requests_total{refused="true"}[5m])) / sum(rate(chat_requests_total[5m]))`
+  - judge leakage-rate:
+    `sum(rate(judge_evaluations_total{verdict="leaked"}[1h])) / sum(rate(judge_evaluations_total[1h]))`
+- Request latency panel:
+  - p50/p95/p99 via `histogram_quantile` over
+    `chat_request_duration_seconds_bucket`, keeping `le` and `config_id`.
+- Judge verdicts panel:
+  - `sum by (verdict) (rate(judge_evaluations_total[1h]))`
+
+Live smoke test:
+
+Started a temporary production-mode service with full judge sampling:
+
+```bash
+JUDGE_SAMPLE_RATE=1.0 ASSISTANT_MODEL_ALIAS=production ASSISTANT_PORT=8002 \
+  .venv/bin/uvicorn src.assistant.service:app --host 0.0.0.0 --port 8002
+```
+
+Sent four mixed requests:
+
+- travel request: `input_category=travel`, `refused=false`, `output_verdict=ok`
+- off-topic joke: `input_category=off_topic`, `refused=true`
+- jailbreak math request: `input_category=suspicious`, `refused=true`
+- travel visa request: `input_category=travel`, `refused=false`, `output_verdict=ok`
+
+Verified `/metrics` exposed the new series:
+
+- `chat_request_duration_seconds_bucket{config_id="v6", ...}`
+- `chat_input_tokens_bucket{config_id="v6", model="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B", ...}`
+- `chat_output_tokens_bucket{config_id="v6", model="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B", ...}`
+- `judge_evaluations_total{config_id="v6", verdict="answered_correctly"} 2.0`
+- `judge_evaluations_total{config_id="v6", verdict="refused_correctly"} 2.0`
+- `judge_latency_seconds_bucket{config_id="v6", ...}`
+
+Final checks:
+
+```bash
+.venv/bin/ruff check src/monitoring/metrics.py src/assistant/service.py src/monitoring/judge_worker.py
+.venv/bin/ruff format --check src/monitoring/metrics.py src/assistant/service.py src/monitoring/judge_worker.py
+.venv/bin/python -m py_compile src/monitoring/metrics.py src/assistant/service.py src/monitoring/judge_worker.py
+.venv/bin/python -m json.tool observability/grafana/dashboards/live_monitoring.json
+```
+
+All checks passed. The temporary Task4 smoke-test service was stopped after
+verification.
